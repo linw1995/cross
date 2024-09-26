@@ -1426,26 +1426,27 @@ fn docker_read_mount_paths(
 fn dockerinfo_parse_mounts(info: &serde_json::Value) -> Result<Vec<MountDetail>> {
     let mut mounts = dockerinfo_parse_user_mounts(info);
     let root_info = dockerinfo_parse_root_mount_path(info)?;
-    mounts.push(root_info);
+    if let Some(root) = root_info {
+        mounts.push(root);
+    }
     Ok(mounts)
 }
 
-fn dockerinfo_parse_root_mount_path(info: &serde_json::Value) -> Result<MountDetail> {
+fn dockerinfo_parse_root_mount_path(info: &serde_json::Value) -> Result<Option<MountDetail>> {
     let driver_name = info
         .pointer("/0/GraphDriver/Name")
         .and_then(|v| v.as_str())
         .ok_or_else(|| eyre::eyre!("no driver name found"))?;
 
     if driver_name.to_lowercase().contains("overlay") {
-        let path = info
+        println!("{:#?}", info);
+        Ok(info
             .pointer("/0/GraphDriver/Data/MergedDir")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| eyre::eyre!("No merge directory found"))?;
-
-        Ok(MountDetail {
-            source: PathBuf::from(&path),
-            destination: PathBuf::from("/"),
-        })
+            .and_then(|v| Some(MountDetail {
+                source: PathBuf::from(v),
+                destination: PathBuf::from("/"),
+            })))
     } else {
         eyre::bail!("want driver overlay2, got {driver_name}")
     }
